@@ -7,7 +7,11 @@
 
 # RStudio files
 .Rproj.user/
+.Rdata
 
 # produced vignettes
 vignettes/*.html
 vignettes/*.pdf
+
+# vi
+*.swp
