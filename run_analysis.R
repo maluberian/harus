@@ -1,57 +1,63 @@
-f_activity_labels <- 'data/activity_labels.txt'
-f_features <- 'data/features.txt'
-f_features_info <- 'data/features_info.txt'
-subject_test <- 'data/test/subject_test.txt'
-X_test <- 'data/test/X_test.txt'
-y_test <- 'data/test/y_test.txt'
-subject_train <- 'data/train/subject_train.txt'
-X_train <- 'data/train/X_train.txt'
-y_train <- 'data/train/y_train.txt'
+library(dplyr)
+library(reshape2)
 
-features <- read.csv(f_features, sep = "", header = FALSE)
-activity_labels <- read.csv(f_activity_labels, sep = "", header = FALSE)
-
-# laod training data
-train_subject <- read.csv(subject_train, header = FALSE)
-train_data <- read.csv(X_train, sep = "", header = FALSE)
-train_lbl <- read.csv(y_train, header = FALSE)
-
-# load test data
-test_subject <- read.csv(subject_test, header = FALSE)
-test_data <- read.csv(X_test, sep = "", header = FALSE)
-test_lbl <- read.csv(y_test, header = FALSE)
-
-# merge data
-combined_data <- rbind(train_data, test_data)
-combined_subject <- rbind(train_subject, test_subject)
-combined_lbl <- rbind(train_lbl, test_lbl)
-
-#merge labels
-colnames(combined_data) <- features
-colnames(combined_lbl) <- c('label_id')
-colnames(combined_subject) <- c('subject')
-colnames(activity_labels) <- c('label_id', 'activity_name')
-
-names(combined_data) <- features
-names(combined_lbl)
-names(combined_subject)
-names(activity_labels)
-
-
-# remove measurements off the standard deviation
-#for(i in names(combined_data)){
-#  mn <- mean(as.numeric(as.character(combined_data[,i])))
-#  mn
-#  std <- sd(as.numeric(as.character(combined_data[,i])))
-#  std
-#  keep <- combined_data[,abs(combined_data[0,i] - mn) > std]
-#  keep
-#}
-
-# pull it all together
-colnames(combined_data) <- features
-final_data <- cbind(combined_lbl, combined_data)
-final_data <- cbind(combined_subject, final_data)
-final_data <- merge(final_data, activity_labels, by.x = "label_id", by.y = "label_id", all = TRUE)
-final_data <- final_data[, -which(names(final_data) %in% c('label_id'))]
-names(final_data)
+run_analysis <- function(datadir = 'data', file = NULL) {
+  starting_dir <- getwd() #store the wd so we can change back when done (before file write)
+  setwd(datadir) # make sure we are in the right directory to begin reading data
+  f_activity_labels <- 'activity_labels.txt'
+  f_features <- 'features.txt'
+  f_features_info <- 'features_info.txt'
+  subject_test <- 'test/subject_test.txt'
+  X_test <- 'test/X_test.txt'
+  y_test <- 'test/y_test.txt'
+  subject_train <- 'train/subject_train.txt'
+  X_train <- 'train/X_train.txt'
+  y_train <- 'train/y_train.txt'
+  
+  features <- read.csv(f_features, sep = "", header = FALSE)
+  activity_labels <- read.csv(f_activity_labels, sep = "", header = FALSE)
+  
+  lbls <- c('subject', 'activityLabel', as.vector(features$V2))
+  
+  # laod training data
+  train_subject <- read.csv(subject_train, header = FALSE)
+  train_data <- read.csv(X_train, sep = "", header = FALSE)
+  train_lbl <- read.csv(y_train, header = FALSE)
+  train_data <- cbind(train_subject, train_lbl, train_data)
+  
+  # load test data
+  test_subject <- read.csv(subject_test, header = FALSE)
+  test_data <- read.csv(X_test, sep = "", header = FALSE)
+  test_lbl <- read.csv(y_test, header = FALSE)
+  test_data <- cbind(test_subject, test_lbl, test_data)
+  
+  #combine the training set and test data
+  all_data <- rbind(train_data, test_data)
+  colnames(all_data) <- lbls #label the data
+  
+  #transform the data by removing frames that aren't mean, std or our identifiers
+  all_data <- all_data[, which(colnames(all_data) %in% colnames(all_data)[grep('.*(mean|std|subject|activityLabel)+.*', colnames(all_data))])]
+  
+  #change the subject frame from numeric identifiers to the activity lables
+  all_data$activityLabel <- mapvalues(as.character(all_data$activityLabel), as.character(activity_labels$V1), as.character(activity_labels$V2))
+  
+  #remove unreadable useless characters
+  colnames(all_data) <- gsub("\\(", "", colnames(all_data))
+  colnames(all_data) <- gsub("\\)", "", colnames(all_data))
+  colnames(all_data) <- gsub("-", ".", colnames(all_data))
+  colnames(all_data) <- gsub("_", ".", colnames(all_data))
+  
+  # reshape the data 
+  final_data <- group_by(all_data, subject, activityLabel)
+  final_data <- summarise_each(final_data, funs(mean)) 
+  
+  #change back to the original wd
+  setwd(starting_dir)
+  
+  # if a file is specified write the final data to that file
+  if(!is.null(file)) {
+    write.table(final_data, file = file, row.name = FALSE)
+  }
+  
+  final_data
+}
